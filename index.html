@@ -209,6 +209,18 @@
             flex-wrap: wrap;
             margin: 20px 0;
         }
+        
+        .download-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+            justify-content: center;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            border: 2px solid #e0e0e0;
+        }
 
         .btn {
             padding: 12px 24px;
@@ -607,6 +619,51 @@
             min-width: 20px;
             text-align: center;
         }
+        
+        /* 정답이 채워진 빈칸 스타일 */
+        .gap-blank.filled-answer {
+            background: #e8f5e8;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 5px 10px;
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(76, 175, 80, 0.2);
+            animation: fillAnswer 0.3s ease-in-out;
+        }
+        
+        .gap-blank.filled-answer.sentence-gap {
+            display: flex;
+            min-height: 60px;
+            padding: 15px;
+        }
+        
+        .gap-answer {
+            font-weight: bold;
+            color: #2E7D32;
+            margin-left: 25px;
+            font-size: 16px;
+        }
+        
+        .gap-blank.filled-answer .gap-number {
+            position: static;
+            background: #4CAF50;
+            color: white;
+            margin-right: 10px;
+            display: inline-block;
+        }
+        
+        @keyframes fillAnswer {
+            from {
+                transform: scale(0.9);
+                opacity: 0.7;
+            }
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
 
         .hints-container, .translations-container {
             background: #f8f9fa;
@@ -946,7 +1003,12 @@
             <div class="buttons">
                 <button class="btn btn-success" onclick="generateWorksheet()">📋 워크시트 생성</button>
                 <button class="btn btn-info" onclick="toggleAnswerKey()">🔍 정답 보기/숨기기</button>
-                <button class="btn btn-warning" onclick="downloadWorksheet()">💾 다운로드</button>
+            </div>
+            
+            <!-- 다운로드 및 인쇄 버튼들 -->
+            <div class="buttons download-buttons">
+                <button class="btn btn-warning" onclick="downloadWorksheet()">💾 문제 다운로드</button>
+                <button class="btn btn-primary" onclick="downloadAnswerWorksheet()">🔑 정답 다운로드</button>
                 <button class="btn btn-danger" onclick="printWorksheet()">🖨️ 인쇄</button>
             </div>
 
@@ -1605,13 +1667,78 @@
         function toggleAnswerKey() {
             showAnswers = !showAnswers;
             const answerKey = document.querySelector('.answer-key');
-            if (answerKey) {
-                answerKey.classList.toggle('show', showAnswers);
-                showNotification(showAnswers ? '정답이 표시되었습니다.' : '정답이 숨겨졌습니다.', 'info');
+            const gapBlanks = document.querySelectorAll('.gap-blank');
+            
+            if (showAnswers) {
+                // 정답을 빈칸에 표시
+                fillGapsWithAnswers();
+                if (answerKey) {
+                    answerKey.classList.add('show');
+                }
+                showNotification('정답이 빈칸에 표시되었습니다.', 'success');
+            } else {
+                // 빈칸을 원래 상태로 복원
+                clearGapsFromAnswers();
+                if (answerKey) {
+                    answerKey.classList.remove('show');
+                }
+                showNotification('빈칸이 원래 상태로 복원되었습니다.', 'info');
             }
         }
+        
+        // 빈칸에 정답 채우기
+        function fillGapsWithAnswers() {
+            const gapBlanks = document.querySelectorAll('.gap-blank');
+            const sortedItems = [...selectedItems].sort((a, b) => {
+                const aNumber = parseInt(document.querySelector(`[data-item-id="${a.id}"]`)?.querySelector('.gap-number')?.textContent || '0');
+                const bNumber = parseInt(document.querySelector(`[data-item-id="${b.id}"]`)?.querySelector('.gap-number')?.textContent || '0');
+                return aNumber - bNumber;
+            });
+            
+            gapBlanks.forEach((blank, index) => {
+                const gapNumber = parseInt(blank.querySelector('.gap-number')?.textContent || '0');
+                const correspondingItem = selectedItems.find(item => {
+                    const itemNumber = getGapNumber(item.id);
+                    return itemNumber === gapNumber;
+                });
+                
+                if (correspondingItem) {
+                    // 원본 내용을 저장 (복원용)
+                    if (!blank.dataset.originalContent) {
+                        blank.dataset.originalContent = blank.innerHTML;
+                    }
+                    
+                    // 정답을 빈칸에 표시
+                    blank.innerHTML = `<span class="gap-number">${gapNumber}</span><span class="gap-answer">${correspondingItem.text}</span>`;
+                    blank.classList.add('filled-answer');
+                }
+            });
+        }
+        
+        // 빈칸에서 정답 제거
+        function clearGapsFromAnswers() {
+            const gapBlanks = document.querySelectorAll('.gap-blank');
+            
+            gapBlanks.forEach(blank => {
+                if (blank.dataset.originalContent) {
+                    blank.innerHTML = blank.dataset.originalContent;
+                    blank.classList.remove('filled-answer');
+                    delete blank.dataset.originalContent;
+                }
+            });
+        }
+        
+        // 항목의 번호 가져오기
+        function getGapNumber(itemId) {
+            // 전역 gapNumbers 객체가 없으므로 DOM에서 찾기
+            const gapElement = document.querySelector(`[data-item-id="${itemId}"]`);
+            if (gapElement && gapElement.querySelector('.gap-number')) {
+                return parseInt(gapElement.querySelector('.gap-number').textContent);
+            }
+            return 0;
+        }
 
-        // 워크시트 다운로드
+        // 워크시트 다운로드 (빈칸 버전)
         function downloadWorksheet() {
             const worksheetContent = document.getElementById('worksheet-preview').innerHTML;
             if (!worksheetContent || worksheetContent.includes('위의 단계를 따라')) {
@@ -1620,21 +1747,105 @@
             }
 
             const title = document.getElementById('worksheet-title').value || 'Fill in the Gap 워크시트';
-            const fullHTML = createFullHTML(title, worksheetContent);
+            const fullHTML = createFullHTML(title, worksheetContent, false); // 빈칸 버전
             
             const blob = new Blob([fullHTML], { type: 'text/html' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${title}.html`;
+            a.download = `${title}_문제.html`;
             a.click();
             URL.revokeObjectURL(url);
             
-            showNotification('워크시트가 다운로드되었습니다!', 'success');
+            showNotification('빈칸 워크시트가 다운로드되었습니다!', 'success');
+        }
+        
+        // 정답 버전 워크시트 다운로드
+        function downloadAnswerWorksheet() {
+            const worksheetContent = document.getElementById('worksheet-preview').innerHTML;
+            if (!worksheetContent || worksheetContent.includes('위의 단계를 따라')) {
+                showNotification('먼저 워크시트를 생성해주세요!', 'error');
+                return;
+            }
+
+            const title = document.getElementById('worksheet-title').value || 'Fill in the Gap 워크시트';
+            
+            // 현재 상태 저장
+            const currentShowAnswers = showAnswers;
+            
+            // 임시로 정답을 채운 상태의 HTML 생성
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = worksheetContent;
+            
+            // 정답을 채운 워크시트 HTML 생성
+            const filledContent = createAnswerFilledContent(worksheetContent);
+            const fullHTML = createFullHTML(title, filledContent, true); // 정답 버전
+            
+            const blob = new Blob([fullHTML], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${title}_정답.html`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showNotification('정답 워크시트가 다운로드되었습니다!', 'success');
+        }
+        
+        // 정답이 채워진 컨텐츠 생성
+        function createAnswerFilledContent(originalContent) {
+            // DOM 파서를 사용하여 HTML을 파싱
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(originalContent, 'text/html');
+            
+            // 모든 빈칸을 찾아서 정답으로 채우기
+            const gapBlanks = doc.querySelectorAll('.gap-blank');
+            
+            gapBlanks.forEach(blank => {
+                const gapNumber = parseInt(blank.querySelector('.gap-number')?.textContent || '0');
+                
+                // 해당 번호에 맞는 정답 찾기
+                const correspondingItem = selectedItems.find(item => {
+                    // 위치 기반으로 번호를 다시 계산
+                    const elementPositions = [];
+                    
+                    selectedItems.forEach((tempItem, index) => {
+                        let textToFind = tempItem.text;
+                        let startPos = -1;
+                        
+                        if (tempItem.type === 'phrase' && tempItem.mergedWords) {
+                            textToFind = tempItem.mergedWords.join(' ');
+                            startPos = originalText.indexOf(textToFind);
+                        } else {
+                            startPos = originalText.indexOf(textToFind);
+                        }
+                        
+                        if (startPos !== -1) {
+                            elementPositions.push({
+                                item: tempItem,
+                                startPos: startPos
+                            });
+                        }
+                    });
+                    
+                    elementPositions.sort((a, b) => a.startPos - b.startPos);
+                    const itemIndex = elementPositions.findIndex(pos => pos.item.id === item.id);
+                    
+                    return itemIndex + 1 === gapNumber;
+                });
+                
+                if (correspondingItem) {
+                    // 정답을 빈칸에 채우기
+                    blank.innerHTML = `<span class="gap-number">${gapNumber}</span><span class="gap-answer">${correspondingItem.text}</span>`;
+                    blank.classList.add('filled-answer');
+                }
+            });
+            
+            return doc.body.innerHTML;
         }
 
         // 완전한 HTML 생성 (랜덤 단어목록 포함)
-        function createFullHTML(title, content) {
+        function createFullHTML(title, content, isAnswerVersion = false) {
             // 다운로드용 HTML에서도 단어목록 랜덤화
             let processedContent = content;
             
@@ -1805,6 +2016,39 @@
             border-radius: 10px;
             min-width: 20px;
             text-align: center;
+        }
+        
+        /* 정답이 채워진 빈칸 스타일 (다운로드용) */
+        .gap-blank.filled-answer {
+            background: #e8f5e8;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 5px 10px;
+            min-height: 30px;
+            display: inline-flex;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(76, 175, 80, 0.2);
+        }
+        
+        .gap-blank.filled-answer.sentence-gap {
+            display: flex;
+            min-height: 60px;
+            padding: 15px;
+        }
+        
+        .gap-answer {
+            font-weight: bold;
+            color: #2E7D32;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+        
+        .gap-blank.filled-answer .gap-number {
+            position: static;
+            background: #4CAF50;
+            color: white;
+            margin-right: 10px;
+            display: inline-block;
         }
         .hints-container, .translations-container {
             background: #f8f9fa;
